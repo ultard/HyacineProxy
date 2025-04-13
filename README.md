@@ -31,6 +31,8 @@ dotnet build -c Release
 dotnet HyacineProxy.dll
 ```
 
+or use precompiled binaries from [actions](https://github.com/ultard/HyacineProxy/actions)
+
 On first launch, a `config.json` configuration file will be automatically created with default settings.
 
 2. To stop the proxy server, press Ctrl+C.
