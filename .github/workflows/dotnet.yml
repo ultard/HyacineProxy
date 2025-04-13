@@ -1,0 +1,37 @@
+name: .NET
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  publish-aot:
+    strategy:
+      matrix:
+        runtime-id: [win-x64]
+
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Test
+        run: dotnet test --verbosity normal
+      - name: Publish
+        run: dotnet publish HyacineProxy.csproj -c Release -r ${{ matrix.runtime-id }}
+      - name: Remove .pdb debug symbols
+        run: |
+          rm bin/Release/net9.0/${{ matrix.runtime-id }}/publish/*.pdb
+          rm bin/Release/net9.0/${{ matrix.runtime-id }}/publish/**/*.pdb        
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: HyacineProxy_${{ matrix.runtime-id }}
+          path: bin/Release/net9.0/${{ matrix.runtime-id }}/publish
