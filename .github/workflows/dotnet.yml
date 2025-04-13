@@ -25,7 +25,7 @@ jobs:
       - name: Test
         run: dotnet test --verbosity normal
       - name: Publish
-        run: dotnet publish HyacineProxy.csproj -c Release -r ${{ matrix.runtime-id }}
+        run: dotnet publish HyacineProxy.csproj -c Release -r ${{ matrix.runtime-id }} -p:PublishSingleFile=true --self-contained true
       - name: Remove .pdb debug symbols
         run: |
           rm bin/Release/net9.0/${{ matrix.runtime-id }}/publish/*.pdb
