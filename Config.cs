@@ -4,6 +4,10 @@ namespace HyacineProxy;
 
 public class Config
 {
+    private FileSystemWatcher? _configWatcher;
+    private string _configPath = string.Empty;
+    private int _initialProxyPort;
+    
     public int ProxyPort { get; set; }
     public EndpointConfig Dispatch { get; set; } = new();
     public EndpointConfig SDK { get; set; } = new();
@@ -17,11 +21,13 @@ public class Config
         {
             Console.WriteLine($"Config not found: {path}");
             Console.WriteLine("Creating new config file with default data...");
-            
+
             var defaultConfig = CreateDefaultConfig();
             defaultConfig.SaveConfig(path);
-            
+
             Console.WriteLine("File created successfully.");
+            
+            defaultConfig.StartWatchingConfigChanges(path);
             return defaultConfig;
         }
 
@@ -34,6 +40,7 @@ public class Config
             throw new InvalidOperationException("Unable to deserialize config file.");
         }
 
+        config.StartWatchingConfigChanges(path);
         return config;
     }
     
@@ -46,6 +53,80 @@ public class Config
         
         var jsonContent = JsonSerializer.Serialize(this, jsonOptions);
         File.WriteAllText(path, jsonContent);
+    }
+    
+    private void StartWatchingConfigChanges(string configPath)
+    {
+        if (string.IsNullOrEmpty(configPath))
+        {
+            Console.WriteLine("Error: Config path is null or empty.");
+            return;
+        }
+        
+        var absolutePath = Path.GetFullPath(configPath);
+        _configPath = absolutePath;
+        _initialProxyPort = ProxyPort;
+
+        var directory = Path.GetDirectoryName(absolutePath);
+        var fileName = Path.GetFileName(absolutePath);
+        
+        if (string.IsNullOrEmpty(directory))
+        {
+            directory = Directory.GetCurrentDirectory();
+        }
+
+        _configWatcher = new FileSystemWatcher(directory, fileName)
+        {
+            NotifyFilter = NotifyFilters.LastWrite,
+            EnableRaisingEvents = true
+        };
+
+        _configWatcher.Changed += OnConfigFileChanged;
+    }
+    
+    private void OnConfigFileChanged(object sender, FileSystemEventArgs e)
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                Thread.Sleep(300);
+
+                var jsonContent = File.ReadAllText(_configPath);
+                var updatedConfig = JsonSerializer.Deserialize<Config>(jsonContent,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (updatedConfig == null)
+                {
+                    Console.WriteLine("Error: Unable to deserialize updated config file.");
+                    return;
+                }
+                
+                updatedConfig.ProxyPort = _initialProxyPort;
+                
+                Dispatch = updatedConfig.Dispatch;
+                SDK = updatedConfig.SDK;
+                AlwaysIgnoreDomains = updatedConfig.AlwaysIgnoreDomains;
+                RedirectDomains = updatedConfig.RedirectDomains;
+                BlockUrls = updatedConfig.BlockUrls;
+
+                Console.WriteLine($"Config reloaded successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error reloading config: {ex.Message}");
+            }
+        });
+    }
+    
+    public void StopWatchingConfigChanges()
+    {
+        if (_configWatcher == null) return;
+        _configWatcher.Changed -= OnConfigFileChanged;
+        _configWatcher.EnableRaisingEvents = false;
+        _configWatcher.Dispose();
+        _configWatcher = null;
+        Console.WriteLine("Watching of config file stopped.");
     }
     
     private static Config CreateDefaultConfig()
